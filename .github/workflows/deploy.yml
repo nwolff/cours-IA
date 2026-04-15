@@ -1,0 +1,68 @@
+name: Deploy a svelte app to github pages
+
+on:
+  push:
+    branches: ['main']
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
+# Cancel current deployment when a new push occurs
+concurrency:
+  group: 'pages'
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      # https://stackoverflow.com/questions/60942067/get-current-date-and-time-in-github-workflows
+      - name: Get current datetime and short SHA
+        id: buildinfo
+        run: |
+          echo "datetime=$(TZ=Europe/Zurich date +'%Y-%m-%d %H:%M %Z')" >> $GITHUB_OUTPUT
+          echo "short_sha=$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
+
+      # https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/variables
+      - name: Write build info to /about
+        uses: cschleiden/replace-tokens@v1
+        with:
+          tokenPrefix: '['
+          tokenSuffix: ']'
+          files: 'src/components/About.svelte'
+        env:
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+          TIMESTAMP: ${{ steps.buildinfo.outputs.datetime }}
+          SHORT_SHA: ${{ steps.buildinfo.outputs.short_sha }}
+
+      - run: npm install
+
+      - run: npm run build
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: 'dist'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
